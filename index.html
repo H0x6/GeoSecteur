@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GéoRues — Secteur Thann 🚒</title>
+<title>GéoSecteur</title>
 <style>
 /* required styles */
 
@@ -701,8 +701,16 @@ button:disabled { opacity:.45; cursor:default; }
 #roundNo,#totalScore { font-variant-numeric:tabular-nums; }
 .badge { padding:3px 10px; border-radius:20px; font-size:.8em; font-weight:600; }
 .badge.facile { background:#2a9d8f; } .badge.difficile { background:#e76f51; }
+.timer { position:absolute; top:64px; right:10px; z-index:1000; pointer-events:none;
+  background:#fff; color:#1d3557; border:2px solid rgba(0,0,0,.25); border-radius:8px;
+  padding:4px 10px; font-variant-numeric:tabular-nums; font-weight:700; font-size:1.15em;
+  box-shadow:0 1px 4px rgba(0,0,0,.25); }
+.timer.low { color:#e63946; background:#fff0f0; border-color:#e63946; }
 .quit { background:transparent; color:#fff; border:1px solid rgba(255,255,255,.45); padding:5px 12px; font-size:.85em; border-radius:8px; }
 .quit:hover { background:rgba(255,255,255,.12); }
+.leaflet-control-layers-toggle { background-image:none !important; display:flex; align-items:center; justify-content:center; font-size:21px; text-decoration:none; }
+.leaflet-control-layers-toggle::before { content:"🗺️"; }
+.leaflet-retina .leaflet-control-layers-toggle { background-image:none !important; }
 #map { flex:1; min-height:200px; }
 #bottombar { background:#fff; border-top:1px solid #ddd; padding:10px 14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; min-height:58px; }
 #hint { color:#666; font-size:.92em; flex:1; min-width:180px; }
@@ -724,7 +732,7 @@ td:nth-child(4),td:nth-child(5),th:nth-child(4),th:nth-child(5) { text-align:rig
 
 <div id="screen-home" class="screen">
   <div class="panel">
-    <h1>🚒 GéoRues — Secteur Thann</h1>
+    <h1>🚒GéoSecteur - Secteur de Thann</h1>
     <p class="sub">Entraînement à la localisation des rues · tracés officiels BD TOPO IGN (noms de voies BAN)</p>
     <fieldset>
       <legend>Communes</legend>
@@ -762,7 +770,7 @@ td:nth-child(4),td:nth-child(5),th:nth-child(4),th:nth-child(5) { text-align:rig
     <span id="totalScore">0 pts</span>
     <button id="btnQuit" class="quit" title="Quitter la partie et revenir au menu">✕ Quitter</button>
   </div>
-  <div id="map"></div>
+  <div id="map"><span id="timer" class="timer"></span></div>
   <div id="bottombar">
     <span id="hint"></span>
     <div id="result" class="result hidden"></div>
@@ -776,6 +784,7 @@ td:nth-child(4),td:nth-child(5),th:nth-child(4),th:nth-child(5) { text-align:rig
   <div class="panel">
     <h1>Récapitulatif</h1>
     <div id="recapScore"></div>
+    <div style="margin:6px 0"><span id="recapMode" class="badge facile"></span></div>
     <div id="recapStats"></div>
     <table>
       <thead><tr><th>#</th><th>Rue</th><th>Commune</th><th>Écart</th><th>Points</th></tr></thead>
@@ -862,7 +871,17 @@ const GeoMath = {
     return b;
   }
 };
-if (typeof module !== "undefined") { module.exports = { GeoMath, DATA }; }
+/* ===== Minuteur — À AJUSTER ICI =====
+   Format : [nombre de communes maxi, secondes]. Lu de haut en bas,
+   la première ligne dont le maxi couvre la sélection s'applique. */
+const TIMER_RULES = {
+  facile:    [[2, 20], [4, 30], [Infinity, 40]],
+  difficile: [[2, 45], [4, 60], [Infinity, 90]]
+};
+function timerFor(mode, nCommunes) {
+  for (const [max, s] of TIMER_RULES[mode]) if (nCommunes <= max) return s;
+}
+if (typeof module !== "undefined") { module.exports = { GeoMath, DATA, TIMER_RULES, timerFor }; }
 
 /* ===== Jeu (navigateur uniquement) ===== */
 if (typeof document !== "undefined" && typeof L !== "undefined") {
@@ -876,6 +895,10 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
         attr: "© OpenStreetMap contributors" },
       { name: "Plan IGN (noms de rues)", maxZoom: 19,
         url: "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        attr: "IGN-F / Géoplateforme" },
+      { name: "Photo satellite + noms (IGN)", maxZoom: 19,
+        url: "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        overlayUrl: "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=TRANSPORTNETWORKS.ROADS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
         attr: "IGN-F / Géoplateforme" }
     ],
     difficile: [
@@ -908,7 +931,7 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
   const $ = id => document.getElementById(id);
   let map = null, layerControl = null, currentLayer = null;
   let guessMarker = null, revealGroup = null;
-  const state = { pool: [], rounds: 0, idx: 0, total: 0, results: [], mode: "facile", guess: null, validated: false, opts: null };
+  const state = { pool: [], rounds: 0, idx: 0, total: 0, results: [], mode: "facile", guess: null, validated: false, opts: null, timerSec: 0, timeLeft: 0, timerId: null };
 
   /* --- Écran d'accueil --- */
   function initHome() {
@@ -974,18 +997,25 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
     if (!map) {
       map = L.map("map", { zoomControl: true });
       map.on("click", onMapClick);
+      map.on("baselayerchange", e => { currentLayer = e.layer; });
       revealGroup = L.layerGroup().addTo(map);
     }
     if (layerControl) { map.removeControl(layerControl); layerControl = null; }
     if (currentLayer) { map.removeLayer(currentLayer); currentLayer = null; }
+    map.eachLayer(l => {
+      if (l !== revealGroup && (l instanceof L.TileLayer || l instanceof L.LayerGroup)) map.removeLayer(l);
+    });
     const layers = {};
     list.forEach(bm => {
       const opt = { maxZoom: bm.maxZoom, attribution: bm.attr };
       if (bm.sub) opt.subdomains = bm.sub;
-      layers[bm.name] = L.tileLayer(bm.url, opt);
+      const base = L.tileLayer(bm.url, opt);
+      layers[bm.name] = bm.overlayUrl
+        ? L.layerGroup([base, L.tileLayer(bm.overlayUrl, { maxZoom: bm.maxZoom })])
+        : base;
     });
     currentLayer = layers[chosen.name].addTo(map);
-    currentLayer.once("tileerror", () => toast("⚠️ Problème de chargement du fond de carte."));
+    if (currentLayer.once) { try { currentLayer.once("tileerror", () => toast("⚠️ Problème de chargement du fond de carte.")); } catch (e) {} }
     layerControl = L.control.layers(layers, null, { position: "topright" }).addTo(map);
     map.setMaxBounds(bounds.pad(0.6));
     map.options.minZoom = 11;
@@ -994,6 +1024,47 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
   }
 
   /* --- Déroulé du jeu --- */
+  function stopTimer() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
+  function renderTimer() {
+    const t = $("timer");
+    const m = Math.floor(state.timeLeft / 60), s = state.timeLeft % 60;
+    t.textContent = "⏱ " + m + ":" + String(s).padStart(2, "0");
+    t.classList.toggle("low", state.timeLeft <= 10);
+  }
+  function startTimer() {
+    stopTimer();
+    state.timeLeft = state.timerSec;
+    renderTimer();
+    state.timerId = setInterval(() => {
+      state.timeLeft--;
+      renderTimer();
+      if (state.timeLeft <= 0) { stopTimer(); timeUp(); }
+    }, 1000);
+  }
+  function timeUp() {
+    if (state.validated) return;
+    state.validated = true;
+    const r = state.pool[state.idx];
+    let d = null;
+    // révèle le vrai tracé
+    const lines = r.segs.map(seg => L.polyline(seg, { color: "#e63946", weight: 6, opacity: 0.9 }));
+    lines.forEach(l => revealGroup.addLayer(l));
+    if (state.guess) {
+      const res = GeoMath.distToStreet(state.guess, r.segs);
+      d = res.d;
+      revealGroup.addLayer(L.polyline([state.guess, res.pt], { color: "#1d3557", weight: 3, dashArray: "6 8", opacity: 0.9 }));
+    }
+    state.results.push({ name: r.name, commune: r.commune, d: d, pts: 0, hit: false, timeout: true });
+    map.fitBounds(L.featureGroup(lines).getBounds().pad(0.3));
+    const el = $("result");
+    el.className = "result far";
+    el.innerHTML = "⏱ <b>Temps écoulé — 0 pt</b>" + (d !== null ? " (ton point était à " + GeoMath.fmtDist(d) + ")" : "");
+    $("btnValidate").classList.add("hidden");
+    const last = state.idx === state.rounds - 1;
+    $("btnNext").textContent = last ? "Voir le récap →" : "Manche suivante →";
+    $("btnNext").classList.remove("hidden");
+    $("hint").textContent = "";
+  }
   function shuffle(a) {
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -1015,6 +1086,7 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
     } catch (e) {}
     state.pool = shuffle(pool.slice()).slice(0, nb);
     state.rounds = nb; state.idx = 0; state.total = 0; state.results = []; state.mode = mode;
+    state.timerSec = timerFor(mode, selectedCommunes().length);
     show("game");
     $("modeBadge").textContent = mode === "facile" ? "Mode facile" : "Mode difficile";
     $("modeBadge").className = "badge " + mode;
@@ -1035,6 +1107,7 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
     $("btnValidate").classList.remove("hidden");
     $("btnNext").classList.add("hidden");
     $("hint").textContent = "Clique sur la carte à l'endroit où tu penses que se trouve cette rue.";
+    startTimer();
   }
   function onMapClick(e) {
     if (state.validated) return;
@@ -1048,6 +1121,7 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
   function validate() {
     if (!state.guess || state.validated) return;
     state.validated = true;
+    stopTimer();
     const r = state.pool[state.idx];
     const res = GeoMath.distToStreet(state.guess, r.segs);
     const pts = GeoMath.score(res.d);
@@ -1085,15 +1159,24 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
     const max = state.rounds * GeoMath.MAX_PTS;
     const hits = state.results.filter(r => r.hit).length;
     $("recapScore").textContent = state.total + " / " + max + " pts";
-    const avg = state.results.reduce((s, r) => s + r.d, 0) / state.results.length;
-    $("recapStats").textContent = hits + " rue(s) trouvée(s) en plein dessus · écart moyen " + GeoMath.fmtDist(avg);
+    const answered = state.results.filter(r => !r.timeout);
+    const avg = answered.length ? answered.reduce((s, r) => s + r.d, 0) / answered.length : null;
+    const modeTxt = state.mode === "facile" ? "Mode facile (fond avec noms)" : "Mode difficile (fond sans noms)";
+    $("recapMode").textContent = modeTxt + " · " + state.rounds + " manches";
+    $("recapMode").className = "badge " + state.mode;
+    const nTimeout = state.results.length - answered.length;
+    $("recapStats").textContent = hits + " rue(s) trouvée(s) en plein dessus · écart moyen " +
+      (avg === null ? "—" : GeoMath.fmtDist(avg)) + (nTimeout ? " · " + nTimeout + " temps écoulé(s)" : "");
     const tb = $("recapBody");
     tb.innerHTML = "";
     state.results.forEach((r, i) => {
       const tr = document.createElement("tr");
       tr.className = r.hit ? "hit" : "";
+      const ecart = r.timeout
+        ? "⏱ écoulé" + (r.d !== null ? " (" + GeoMath.fmtDist(r.d) + ")" : "")
+        : (r.hit ? "🎯 " : "") + GeoMath.fmtDist(r.d);
       tr.innerHTML = "<td>" + (i + 1) + "</td><td>" + r.name + "</td><td>" + r.commune + "</td><td>" +
-        (r.hit ? "🎯 " : "") + GeoMath.fmtDist(r.d) + "</td><td>" + r.pts + "</td>";
+        ecart + "</td><td>" + r.pts + "</td>";
       tb.appendChild(tr);
     });
   }
@@ -1114,7 +1197,7 @@ if (typeof document !== "undefined" && typeof L !== "undefined") {
     $("btnValidate").addEventListener("click", validate);
     $("btnNext").addEventListener("click", nextOrRecap);
     $("btnQuit").addEventListener("click", () => {
-      if (confirm("Quitter la partie en cours et revenir au menu ?")) show("home");
+      if (confirm("Quitter la partie en cours et revenir au menu ?")) { stopTimer(); show("home"); }
     });
   });
 }
