@@ -7,6 +7,10 @@ GéoSecteur est un jeu inspiré de GeoGuessr permettant de s'entraîner à local
 
 Le projet a été conçu principalement pour les sapeurs-pompiers, les forces de l'ordre ou toute personne souhaitant améliorer sa connaissance du réseau routier d'un territoire.
 
+## Objectif
+
+L'objectif est de permettre un entraînement rapide et ludique à la localisation des rues d'un secteur, notamment dans le cadre des interventions des services de secours.
+
 ## Fonctionnalités
 
 - Sélection d'une ou plusieurs communes
@@ -17,7 +21,7 @@ Le projet a été conçu principalement pour les sapeurs-pompiers, les forces de
 - Timer automatique selon la difficulté et le nombre de communes
 - Calcul du score en fonction de la distance jusqu'à la rue
 - Récapitulatif complet de la partie
-- Fonctionne directement dans un navigateur (aucune installation nécessaire)
+- Fonctionne directement dans un navigateur PC ou mobile (aucune installation nécessaire)
 
 ## Calcul du score
 
@@ -43,6 +47,16 @@ Le projet a été conçu principalement pour les sapeurs-pompiers, les forces de
 | 3 à 4 | 30 s |
 | 5 et + | 40 s |
 
+## Utilisation
+
+- Ouvrir le fichier `index.html` dans un navigateur.
+
+ou
+
+- Cliquer sur le lien GitHub Pages en haut de cette note.
+
+
+
 ## Technologies utilisées
 
 - HTML
@@ -53,18 +67,6 @@ Le projet a été conçu principalement pour les sapeurs-pompiers, les forces de
 - Données IGN BD TOPO
 - Base Adresse Nationale (BAN)
 
-## Utilisation
-
-1. Ouvrir le fichier `index.html` dans un navigateur.
-
-ou
-
-Déployer le projet via GitHub Pages.
-
-## Objectif
-
-L'objectif est de permettre un entraînement rapide et ludique à la localisation des rues d'un secteur, notamment dans le cadre des interventions des services de secours.
-
 ## Auteur
 
-Conçu par **Hugo B.** avec l'aide de **ChatGPT** 🤖.
+Conçu par **HB** avec l'aide de **Claude**🤖.
