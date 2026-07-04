@@ -1,6 +1,6 @@
 # 🗺️GeoSecteur
 
-##🔗Lien:
+🔗Lien:
 https://h0x6.github.io/GeoSecteur/
 
 GéoSecteur est un jeu inspiré de GeoGuessr permettant de s'entraîner à localiser les rues d'un secteur donné sur une carte.
